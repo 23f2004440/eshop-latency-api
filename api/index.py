@@ -26,7 +26,7 @@ df = pd.DataFrame(data)
 # -----------------------------------------------------
 
 
-@app.post("/api")
+@app.post("/")
 async def analyze(payload: dict):
     regions = payload.get("regions", [])
     threshold = payload.get("threshold_ms", 0)
