@@ -1,8 +1,9 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import numpy as np
 import json
+import os
 
 app = FastAPI()
 
@@ -14,17 +15,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load telemetry once
-with open("telemetry.json") as f:
+# -------- LOAD TELEMETRY SAFELY (VERCEL FIX) --------
+BASE_DIR = os.path.dirname(__file__)
+FILE_PATH = os.path.join(BASE_DIR, "..", "telemetry.json")
+
+with open(FILE_PATH) as f:
     data = json.load(f)
 
 df = pd.DataFrame(data)
+# -----------------------------------------------------
+
 
 @app.post("/api")
-async def analyze(request: Request):
-    body = await request.json()
-    regions = body.get("regions", [])
-    threshold = body.get("threshold_ms", 0)
+async def analyze(payload: dict):
+    regions = payload.get("regions", [])
+    threshold = payload.get("threshold_ms", 0)
 
     results = {}
 
