@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import numpy as np
@@ -7,15 +7,16 @@ import os
 
 app = FastAPI()
 
-# Enable CORS for POST from any origin
+# Proper CORS setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["POST"],
+    allow_credentials=True,
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# -------- LOAD TELEMETRY SAFELY (VERCEL FIX) --------
+# Load telemetry safely for Vercel
 BASE_DIR = os.path.dirname(__file__)
 FILE_PATH = os.path.join(BASE_DIR, "..", "telemetry.json")
 
@@ -23,11 +24,14 @@ with open(FILE_PATH) as f:
     data = json.load(f)
 
 df = pd.DataFrame(data)
-# -----------------------------------------------------
 
 
 @app.post("/")
-async def analyze(payload: dict):
+async def analyze(payload: dict, response: Response):
+
+    # Manually ensure header is present (extra safe for Vercel)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+
     regions = payload.get("regions", [])
     threshold = payload.get("threshold_ms", 0)
 
@@ -39,16 +43,20 @@ async def analyze(payload: dict):
         if region_df.empty:
             continue
 
-        avg_latency = region_df["latency_ms"].mean()
-        p95_latency = np.percentile(region_df["latency_ms"], 95)
-        avg_uptime = region_df["uptime_pct"].mean()
-        breaches = (region_df["latency_ms"] > threshold).sum()
-
         results[region] = {
-            "avg_latency": round(float(avg_latency), 2),
-            "p95_latency": round(float(p95_latency), 2),
-            "avg_uptime": round(float(avg_uptime), 3),
-            "breaches": int(breaches)
+            "avg_latency": round(float(region_df["latency_ms"].mean()), 2),
+            "p95_latency": round(float(np.percentile(region_df["latency_ms"], 95)), 2),
+            "avg_uptime": round(float(region_df["uptime_pct"].mean()), 3),
+            "breaches": int((region_df["latency_ms"] > threshold).sum())
         }
 
     return results
+
+
+# Handle OPTIONS (preflight)
+@app.options("/")
+async def options_handler(response: Response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return {}
